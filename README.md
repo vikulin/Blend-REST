@@ -100,6 +100,27 @@ Supported types: `cube`, `cylinder`, `sphere`, `cone`, `plane`
 }
 ```
 
+#### Add Thread
+```json
+{
+  "action": "add_thread",
+  "params": {
+    "target": "Cylinder",    // Name of object to thread
+    "position": [0, 0, 0],   // Position for 3D cursor
+    "radius": 0.2,           // Radius of thread (default: 0.2)
+    "segments": 32,          // Number of segments (default: 32)
+    "loops": 10,             // Number of loops/threads (default: 10)
+    "depth": 10,             // Depth as percentage of minor diameter (default: 10%)
+    "fade": 15,              // Percentage of segments fading (default: 15%)
+    "h1": 0.2,               // Bottom Flank (default: 0.2)
+    "h2": 0.2,               // Top Flank (default: 0.2)
+    "h3": 0.05,              // Crest (default: 0.05)
+    "h4": 0.05,              // Root (default: 0.05)
+    "flip": false            // Flip thread direction (default: false for external thread)
+  }
+}
+```
+
 ## Examples
 
 ### Create a Cylinder

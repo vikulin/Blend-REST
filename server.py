@@ -1,4 +1,4 @@
-import bpy, json, threading
+import bpy, json, threading, bmesh
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import queue
 
@@ -136,6 +136,71 @@ def process_commands():
         elif action == "redo":
             # Use Blender's built-in redo functionality (equivalent to Ctrl+Shift+Z)
             bpy.ops.ed.redo()
+            
+        elif action == "add_thread":
+            bpy.ops.ed.undo_push(message="Original")
+            # Add thread using MACHIN3tools plugin
+            thread_params = cmd.get("params", {})
+            target_object = thread_params.get("target")  # Object to apply thread to
+            position = thread_params.get("position", [0, 0, 0])  # Position for cursor
+            radius = thread_params.get("radius", 0.2)  # Radius of the thread
+            segments = thread_params.get("segments", 32)  # Number of segments
+            loops = thread_params.get("loops", 10)  # Number of loops/threads
+            depth = thread_params.get("depth", 10)  # Depth as percentage of minor diameter
+            fade = thread_params.get("fade", 15)  # Percentage of segments fading
+            h1 = thread_params.get("h1", 0.2)  # Bottom Flank
+            h2 = thread_params.get("h2", 0.2)  # Top Flank
+            h3 = thread_params.get("h3", 0.05)  # Crest
+            h4 = thread_params.get("h4", 0.05)  # Root
+            flip = thread_params.get("flip", False)  # Flip thread direction
+            
+            # Get the target object
+            obj = bpy.data.objects.get(target_object)
+            if not obj:
+                print(f"Error: Object '{target_object}' not found")
+                return 0.1
+                
+            # Position the 3D cursor
+            bpy.context.scene.cursor.location = position
+            
+            # Select object and enter edit mode
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            
+            # Select only the side (tube) faces of the cylinder, exclude top and bottom
+            # Use a simpler approach: select all faces, then deselect by normal direction
+            bpy.ops.mesh.select_mode(type="FACE")
+            bpy.ops.mesh.select_all(action='SELECT')  # Select all faces first
+            
+            # Deselect faces pointing mostly up/down (top/bottom faces)
+            # This works in edit mode without bmesh issues
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL')  # Select only quads (side faces)
+            
+            # Create the thread using MACHIN3tools operator
+            try:
+                bpy.ops.machin3.add_thread(
+                    radius=radius,
+                    segments=segments,
+                    loops=loops,
+                    depth=depth,
+                    fade=fade,
+                    h1=h1,
+                    h2=h2,
+                    h3=h3,
+                    h4=h4,
+                    flip=flip
+                )
+                print(f"Thread created on '{target_object}' at position {position}")
+            except Exception as e:
+                print(f"Error adding thread: {e}")
+            finally:
+                # Return to object mode
+                bpy.ops.object.mode_set(mode='OBJECT')
+            
+            bpy.ops.ed.undo_push(message="Added thread")
         # Add more actions as needed
 
     return 0.1  # run again after 0.1 sec
