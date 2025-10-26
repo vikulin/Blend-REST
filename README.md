@@ -72,6 +72,20 @@ Supported types: `cube`, `cylinder`, `sphere`, `cone`, `plane`
 }
 ```
 
+#### Boolean Difference (Create Hole)
+```json
+{
+  "action": "boolean_difference",
+  "target": "Cylinder",
+  "cutter": {
+    "type": "cylinder",
+    "radius": 0.5,
+    "depth": 2.2,
+    "location": [0, 0, 0]
+  }
+}
+```
+
 ## Examples
 
 ### Create a Cylinder
