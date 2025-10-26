@@ -88,6 +88,7 @@ def process_commands():
                     setattr(obj, k, v)
                     
         elif action == "boolean_difference":
+            bpy.ops.ed.undo_push(message="Original")
             # Create a hole using boolean difference operation
             target_name = cmd.get("target")
             cutter_params = cmd.get("cutter", {})
@@ -125,6 +126,16 @@ def process_commands():
                 
                 # Delete the cutter object
                 bpy.data.objects.remove(cutter_obj, do_unlink=True)
+
+                bpy.ops.ed.undo_push(message="Hole created")
+                
+        elif action == "undo":
+            # Use Blender's built-in undo functionality (equivalent to Ctrl+Z)
+            bpy.ops.ed.undo()
+            
+        elif action == "redo":
+            # Use Blender's built-in redo functionality (equivalent to Ctrl+Shift+Z)
+            bpy.ops.ed.redo()
         # Add more actions as needed
 
     return 0.1  # run again after 0.1 sec

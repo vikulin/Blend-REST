@@ -86,6 +86,20 @@ Supported types: `cube`, `cylinder`, `sphere`, `cone`, `plane`
 }
 ```
 
+#### Undo Last Operation
+```json
+{
+  "action": "undo"
+}
+```
+
+#### Redo Last Undone Operation  
+```json
+{
+  "action": "redo"
+}
+```
+
 ## Examples
 
 ### Create a Cylinder
@@ -100,6 +114,17 @@ cd examples
 **Or run directly:**
 ```powershell
 curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "create_object", "type": "cylinder", "params": {"radius": 1, "depth": 1, "location": [0, 0, 0]}}' -Uri "http://localhost:8000/"
+```
+
+### Undo/Redo Operations
+**Undo last operation:**
+```powershell
+curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "undo"}' -Uri "http://localhost:8000/"
+```
+
+**Redo last undone operation:**
+```powershell
+curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "redo"}' -Uri "http://localhost:8000/"
 ```
 
 ## Development
