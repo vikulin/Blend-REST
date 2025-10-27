@@ -1,4 +1,4 @@
-import bpy, json, threading, bmesh
+import bpy, json, threading, bmesh, mathutils
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import queue
 
@@ -137,6 +137,63 @@ def process_commands():
             # Use Blender's built-in redo functionality (equivalent to Ctrl+Shift+Z)
             bpy.ops.ed.redo()
             
+        elif action == "select_faces":
+            bpy.ops.ed.undo_push(message="Original")
+            # Select specific faces on an object
+            select_params = cmd.get("params", {})
+            target_object = select_params.get("target")  # Object to select faces on
+            side_type = select_params.get("side", "all")  # "external", "internal", or "all"
+            
+            # Get the target object
+            obj = bpy.data.objects.get(target_object)
+            if not obj:
+                print(f"Error: Object '{target_object}' not found")
+                return 0.1
+                
+            # Select object and enter edit mode
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            
+            bpy.ops.mesh.select_mode(type="FACE")
+
+            # First select only side faces (quads)
+            bpy.ops.mesh.select_all(action='DESELECT')
+            bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL') 
+            
+            if side_type in ["external", "internal"]:
+                 # Select only quads (side faces)
+                
+                # Now filter based on external/internal using face normals
+                bm = bmesh.from_edit_mesh(obj.data)
+                bm.faces.ensure_lookup_table()
+                
+                # Deselect all first, then selectively re-select based on normal direction
+                for face in bm.faces:
+                    if face.select:  # Only process currently selected faces (side faces)
+                        # Calculate face center
+                        center = face.calc_center_median()
+                        
+                        # Calculate vector from object origin to face center
+                        vec_to_face = center - obj.location
+                        
+                        # Dot product between face normal and vector to face center
+                        dot_product = face.normal.dot(vec_to_face)
+                        
+                        # Determine if this face should be selected based on side_type
+                        should_select = False
+                        if side_type == "external" and dot_product > 0:
+                            should_select = True
+                        elif side_type == "internal" and dot_product < 0:
+                            should_select = True
+                        
+                        face.select = should_select
+                
+                bmesh.update_edit_mesh(obj.data)
+            
+            bpy.ops.ed.undo_push(message=f"Selected {side_type} faces")
+            
         elif action == "add_thread":
             bpy.ops.ed.undo_push(message="Original")
             # Add thread using MACHIN3tools plugin
@@ -163,21 +220,8 @@ def process_commands():
             # Position the 3D cursor
             bpy.context.scene.cursor.location = position
             
-            # Select object and enter edit mode
-            bpy.ops.object.select_all(action='DESELECT')
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.mode_set(mode='EDIT')
-            
-            # Select only the side (tube) faces of the cylinder, exclude top and bottom
-            # Use a simpler approach: select all faces, then deselect by normal direction
-            bpy.ops.mesh.select_mode(type="FACE")
-            bpy.ops.mesh.select_all(action='SELECT')  # Select all faces first
-            
-            # Deselect faces pointing mostly up/down (top/bottom faces)
-            # This works in edit mode without bmesh issues
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL')  # Select only quads (side faces)
+            # Use select_faces action to select side faces first
+            bpy.ops.ed.undo_push(message="Selected side faces")
             
             # Create the thread using MACHIN3tools operator
             try:
@@ -201,6 +245,103 @@ def process_commands():
                 bpy.ops.object.mode_set(mode='OBJECT')
             
             bpy.ops.ed.undo_push(message="Added thread")
+            
+        elif action == "loop_cut":
+            # Perform loop cut operation on selected object
+            loop_params = cmd.get("params", {})
+            target_object = loop_params.get("target")  # Object to apply loop cut to
+            factor = loop_params.get("factor", 0.0)   # Loop cut factor
+            
+            # Get the target object
+            obj = bpy.data.objects.get(target_object)
+            if not obj:
+                print(f"Error: Object '{target_object}' not found")
+                return 0.1
+            
+            # Select object and enter edit mode
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            
+            # Select edges for loop cut (select all edges initially)
+            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
+            
+            # Perform loop cut with the specified factor
+            try:
+                bpy.ops.mesh.loopcut_slide(
+                    MESH_OT_loopcut={
+                        "number_cuts":1,
+                        "smoothness":0,
+                        "falloff":'INVERSE_SQUARE',
+                        "object_index":0,
+                        "edge_index":0,  # Will use first selected edge
+                        "mesh_select_mode_init":(False, False, True)
+                    },
+                    TRANSFORM_OT_edge_slide={
+                        "value":factor,
+                        "single_side":False,
+                        "use_even":False,
+                        "flipped":False,
+                        "use_clamp":True,
+                        "mirror":True,
+                        "snap":False,
+                        "snap_elements":{'INCREMENT'},
+                        "use_snap_project":False,
+                        "snap_target":'CLOSEST',
+                        "use_snap_self":True,
+                        "use_snap_edit":True,
+                        "use_snap_nonedit":True,
+                        "use_snap_selectable":False,
+                        "snap_point":(0, 0, 0),
+                        "correct_uv":True,
+                        "release_confirm":True,
+                        "use_accurate":False
+                    }
+                )
+                print(f"Loop cut applied to '{target_object}' with factor {factor}")
+            except Exception as e:
+                print(f"Error applying loop cut: {e}")
+            finally:
+                # Return to object mode
+                bpy.ops.object.mode_set(mode='OBJECT')
+            
+            bpy.ops.ed.undo_push(message="Loop cut applied")
+            
+        elif action == "bisect_plane":
+            # Perform bisect plane operation on selected object
+            bisect_params = cmd.get("params", {})
+            target_object = bisect_params.get("target")  # Object to bisect
+            factor = bisect_params.get("factor", 0.0)   # Position factor along the axis
+            
+            # Get the target object
+            obj = bpy.data.objects.get(target_object)
+            if not obj:
+                print(f"Error: Object '{target_object}' not found")
+                return 0.1
+            
+            # Select object and enter edit mode
+            bpy.ops.object.select_all(action='DESELECT')
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            
+            # Create BMesh from edit mesh
+            bm = bmesh.from_edit_mesh(obj.data)
+            
+            # Deselect all faces first
+            for f in bm.faces:
+                f.select = False
+            
+            # Select only quad faces (side faces) for bisect operation
+            for f in bm.faces:
+                if len(f.verts) == 4:  # Quad faces
+                    f.select = True
+            
+            # Calculate weighted center and normal direction from selected faces
+            selected_faces = [f for f in bm.faces if f.select]
+            
+            bpy.ops.ed.undo_push(message="Bisect plane applied")
         # Add more actions as needed
 
     return 0.1  # run again after 0.1 sec
