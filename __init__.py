@@ -2,7 +2,7 @@ bl_info = {
     "name": "Blend-REST",
     "description": "REST API server for Blender automation",
     "author": "Vadym Vikulin",
-    "version": (1, 1),
+    "version": (1, 1, 2),
     "blender": (3, 6, 0),
     "location": "View3D > Tool Shelf > Blend-REST",
     "category": "Development",
@@ -24,8 +24,15 @@ command_queue = queue.Queue()
 # Action imports (safe)
 # -----------------------------
 action_modules = [
-    'create_object', 'modify_object', 'boolean_difference',
-    'undo', 'redo', 'select_faces', 'add_thread', 'bisect_plane'
+    'create_object',
+    'modify_object', 
+    'boolean_difference',
+    'undo', 
+    'redo', 
+    'select_faces', 
+    'add_thread', 
+    'bisect_plane',
+    'setup_scene'
 ]
 
 def safe_import_actions():

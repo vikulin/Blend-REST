@@ -168,6 +168,28 @@ Add threaded details using MACHIN3tools plugin (requires MACHIN3tools addon inst
 }
 ```
 
+### Setup Scene
+Configure Blender for small-scale modeling (0-300 mm).
+
+**Request:**
+```json
+{
+  "action": "setup_scene",
+  "params": {
+    "unit_scale": 0.001,
+    "clip_start": 0.1,
+    "clip_end": 10000,
+    "grid_scale": 0.001
+  }
+}
+```
+
+**Parameters:**
+- `unit_scale`: Unit scale (default: 0.001, 1 Blender unit = 1 mm)
+- `clip_start`: Viewport clip start distance in mm (default: 0.1)
+- `clip_end`: Viewport clip end distance in mm (default: 10000)
+- `grid_scale`: Grid scale factor (default: 0.001)
+
 ### Undo/Redo
 Undo or redo operations.
 
