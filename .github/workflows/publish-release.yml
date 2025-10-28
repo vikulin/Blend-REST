@@ -24,13 +24,11 @@ jobs:
 
       - name: Create zip distribution
         run: |
-          cd ${{ github.workspace }}
+          cd ${{ github.workspace }}/..        # go one level up
+          mkdir -p Blend-REST/build            # create build folder inside zip folder
 
-          # Ensure build directory exists
-          mkdir -p build
-
-          # Create zip with a top-level Blend-REST folder
-          zip -r "build/Blend-REST-${{ env.VERSION }}.zip" Blend-REST \
+          # Zip the Blend-REST folder itself
+          zip -r "Blend-REST/build/Blend-REST-${{ env.VERSION }}.zip" Blend-REST \
             -x "*.git*" ".github/*" "build/*" "examples/*"
 
 
@@ -67,8 +65,9 @@ jobs:
           tag_name: ${{ env.TAG_NAME }}
           body_path: RELEASE_BODY.md
           files: |
-            build/Blend-REST-${{ env.VERSION }}.zip
+            Blend-REST/build/Blend-REST-${{ env.VERSION }}.zip
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
+
