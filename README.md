@@ -4,7 +4,7 @@ A Blender addon that provides a REST API server for programmatic 3D object creat
 
 ## 📦 Installation
 
-### Method 1: Install as Blender Addon (Recommended)
+### Install as Blender Addon
 1. **Download the addon**: Get the `Blend-REST.zip` file from the repository
 2. **Install in Blender**:
    - Open Blender
@@ -14,11 +14,6 @@ A Blender addon that provides a REST API server for programmatic 3D object creat
 3. **Start the server**:
    - In the 3D View, look for the "Blend-REST" panel in the sidebar (N-key panel)
    - Click "Start REST Server" to start the API server on port 8000
-
-### Method 2: Manual Script Execution
-```bash
-# Open Blender scripting workspace and run server.py manually
-```
 
 ## 🚀 REST API Endpoints
 
