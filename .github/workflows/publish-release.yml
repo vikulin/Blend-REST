@@ -1,0 +1,79 @@
+name: Publish Blend-REST Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags like v1.0, v1.1, etc.
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Create version from tag
+        run: |
+          TAG_NAME=${{ github.ref_name }}
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          echo "VERSION=${TAG_NAME#v}" >> $GITHUB_ENV
+
+      - name: Create zip distribution
+        run: |
+          cd ${{ github.workspace }}
+
+          # Ensure build directory exists
+          mkdir -p build
+
+          # Create zip with a top-level Blend-REST folder
+          zip -r "build/Blend-REST-v${{ env.VERSION }}.zip" Blend-REST \
+            -x "*.git*" ".github/*" "build/*" "examples/*"
+
+
+      - name: Generate changelog
+        run: |
+          echo "# Blend-REST v${{ env.VERSION }}" > RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "## What's Changed" >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          
+          git log -n 10 --pretty=format:"- %s" >> RELEASE_BODY.md
+          
+          echo "" >> RELEASE_BODY.md
+          echo "---" >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "### 📦 Release Contents" >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "| File Name | Description |" >> RELEASE_BODY.md
+          echo "|-----------|-------------|" >> RELEASE_BODY.md
+          echo "| \`Blend-REST-v${{ env.VERSION }}.zip\` | Blend-REST Blender Addon |" >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "📁 **Installation**: Download the zip file and install via Blender's Preferences > Add-ons > Install..." >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "---" >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "📚 **Documentation**: See [README.md](https://github.com/${{ github.repository }}/blob/main/README.md) for complete API documentation." >> RELEASE_BODY.md
+          echo "" >> RELEASE_BODY.md
+          echo "🐛 **Report Issues**: [Create an issue](https://github.com/${{ github.repository }}/issues)" >> RELEASE_BODY.md
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Blend-REST v${{ env.VERSION }}
+          tag_name: ${{ env.TAG_NAME }}
+          body_path: RELEASE_BODY.md
+          files: |
+            build/Blend-REST-v${{ env.VERSION }}.zip
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.CUSTOM_GITHUB_TOKEN }}
