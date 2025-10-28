@@ -157,14 +157,12 @@ def process_commands():
             bpy.ops.object.mode_set(mode='EDIT')
             
             bpy.ops.mesh.select_mode(type="FACE")
-
-            # First select only side faces (quads)
+            # Default: select all quad faces (side faces only)
             bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL') 
-            
+            bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL')  # Select only quads
+        
             if side_type in ["external", "internal"]:
-                 # Select only quads (side faces)
-                
+            
                 # Now filter based on external/internal using face normals
                 bm = bmesh.from_edit_mesh(obj.data)
                 bm.faces.ensure_lookup_table()
@@ -191,7 +189,6 @@ def process_commands():
                         face.select = should_select
                 
                 bmesh.update_edit_mesh(obj.data)
-            
             bpy.ops.ed.undo_push(message=f"Selected {side_type} faces")
             
         elif action == "add_thread":
@@ -246,73 +243,10 @@ def process_commands():
             
             bpy.ops.ed.undo_push(message="Added thread")
             
-        elif action == "loop_cut":
-            # Perform loop cut operation on selected object
-            loop_params = cmd.get("params", {})
-            target_object = loop_params.get("target")  # Object to apply loop cut to
-            factor = loop_params.get("factor", 0.0)   # Loop cut factor
-            
-            # Get the target object
-            obj = bpy.data.objects.get(target_object)
-            if not obj:
-                print(f"Error: Object '{target_object}' not found")
-                return 0.1
-            
-            # Select object and enter edit mode
-            bpy.ops.object.select_all(action='DESELECT')
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.mode_set(mode='EDIT')
-            
-            # Select edges for loop cut (select all edges initially)
-            bpy.ops.mesh.select_mode(use_extend=False, use_expand=False, type='VERT')
-            
-            # Perform loop cut with the specified factor
-            try:
-                bpy.ops.mesh.loopcut_slide(
-                    MESH_OT_loopcut={
-                        "number_cuts":1,
-                        "smoothness":0,
-                        "falloff":'INVERSE_SQUARE',
-                        "object_index":0,
-                        "edge_index":0,  # Will use first selected edge
-                        "mesh_select_mode_init":(False, False, True)
-                    },
-                    TRANSFORM_OT_edge_slide={
-                        "value":factor,
-                        "single_side":False,
-                        "use_even":False,
-                        "flipped":False,
-                        "use_clamp":True,
-                        "mirror":True,
-                        "snap":False,
-                        "snap_elements":{'INCREMENT'},
-                        "use_snap_project":False,
-                        "snap_target":'CLOSEST',
-                        "use_snap_self":True,
-                        "use_snap_edit":True,
-                        "use_snap_nonedit":True,
-                        "use_snap_selectable":False,
-                        "snap_point":(0, 0, 0),
-                        "correct_uv":True,
-                        "release_confirm":True,
-                        "use_accurate":False
-                    }
-                )
-                print(f"Loop cut applied to '{target_object}' with factor {factor}")
-            except Exception as e:
-                print(f"Error applying loop cut: {e}")
-            finally:
-                # Return to object mode
-                bpy.ops.object.mode_set(mode='OBJECT')
-            
-            bpy.ops.ed.undo_push(message="Loop cut applied")
-            
         elif action == "bisect_plane":
-            # Perform bisect plane operation on selected object
+            # Perform bisect plane operation assuming faces are already selected
             bisect_params = cmd.get("params", {})
             target_object = bisect_params.get("target")  # Object to bisect
-            factor = bisect_params.get("factor", 0.0)   # Position factor along the axis
             
             # Get the target object
             obj = bpy.data.objects.get(target_object)
@@ -321,27 +255,108 @@ def process_commands():
                 return 0.1
             
             # Select object and enter edit mode
-            bpy.ops.object.select_all(action='DESELECT')
-            obj.select_set(True)
-            bpy.context.view_layer.objects.active = obj
-            bpy.ops.object.mode_set(mode='EDIT')
+            #bpy.ops.object.select_all(action='DESELECT')
+            #obj.select_set(True)
+            #bpy.context.view_layer.objects.active = obj
+            #bpy.ops.object.mode_set(mode='EDIT')
             
             # Create BMesh from edit mesh
             bm = bmesh.from_edit_mesh(obj.data)
             
-            # Deselect all faces first
-            for f in bm.faces:
-                f.select = False
-            
-            # Select only quad faces (side faces) for bisect operation
-            for f in bm.faces:
-                if len(f.verts) == 4:  # Quad faces
-                    f.select = True
-            
-            # Calculate weighted center and normal direction from selected faces
+            # Get selected faces (assumes selection was already made via select_faces)
             selected_faces = [f for f in bm.faces if f.select]
             
+            if not selected_faces:
+                print("Error: No faces selected for bisect operation")
+                bpy.ops.object.mode_set(mode='OBJECT')
+                return 0.1
+            
+            # Debug output: show selected faces
+            print(f"Number of selected faces: {len(selected_faces)}")
+            for i, face in enumerate(selected_faces):
+                print(f"Face {i} center: {face.calc_center_median()}, area: {face.calc_area()}")
+            
+            # Calculate weighted center of selected faces
+            total_area = 0.0
+            weighted_center = mathutils.Vector((0, 0, 0))
+            
+            for face in selected_faces:
+                face_center = face.calc_center_median()
+                face_area = face.calc_area()
+                weighted_center += face_center * face_area
+                total_area += face_area
+            
+            if total_area > 0:
+                plane_co = weighted_center / total_area
+            else:
+                plane_co = selected_faces[0].calc_center_median()
+            
+            # Debug output: show weighted center calculation
+            print(f"Weighted center calculation: total_area={total_area}, weighted_center={weighted_center}, plane_co={plane_co}")
+            
+            # Calculate the proper perpendicular direction for cylindrical geometry
+            # Collect all face normals
+            normals = [face.normal for face in selected_faces]
+            print(f"Collected {len(normals)} face normals")
+            
+            # Find two face normals with approximately 90 degree angle
+            best_pair = None
+            best_angle = float('inf')  # Looking for dot product closest to 0
+            
+            for i in range(len(normals)):
+                for j in range(i + 1, len(normals)):
+                    dot_product = abs(normals[i].dot(normals[j]))
+                    if dot_product < best_angle:
+                        best_angle = dot_product
+                        best_pair = (normals[i], normals[j])
+            
+            if best_pair and best_angle < 0.3:  # ~90 degree angle (dot < 0.3)
+                # Calculate cross product to get cylinder axis (perpendicular to both normals)
+                bisect_direction = best_pair[0].cross(best_pair[1]).normalized()
+                print(f"Using cross product method: best_angle={best_angle}, bisect_direction={bisect_direction}")
+            else:
+                # Fallback: find vector most orthogonal to all normals
+                best_axis = None
+                min_max_dot = float('inf')
+                
+                candidates = [
+                    mathutils.Vector((1, 0, 0)),
+                    mathutils.Vector((0, 1, 0)), 
+                    mathutils.Vector((0, 0, 1)),
+                    mathutils.Vector((-1, 0, 0)),
+                    mathutils.Vector((0, -1, 0)),
+                    mathutils.Vector((0, 0, -1))
+                ]
+                
+                for candidate in candidates:
+                    max_dot = max(abs(candidate.dot(normal)) for normal in normals)
+                    if max_dot < min_max_dot:
+                        min_max_dot = max_dot
+                        best_axis = candidate
+                
+                bisect_direction = best_axis
+                print(f"Using fallback method: min_max_dot={min_max_dot}, bisect_direction={bisect_direction}")
+            
+            # Perform bisect operation
+            try:
+                bpy.ops.mesh.bisect(
+                    plane_co=plane_co,
+                    plane_no=bisect_direction,
+                    use_fill=False,
+                    clear_inner=False,
+                    clear_outer=False,
+                    threshold=0.0001
+                )
+                print(f"Bisect plane applied to '{target_object}' at position {plane_co}")
+            except Exception as e:
+                print(f"Error applying bisect: {e}")
+            finally:
+                # Return to object mode
+                print("done")
+                #bpy.ops.object.mode_set(mode='OBJECT')
+            
             bpy.ops.ed.undo_push(message="Bisect plane applied")
+            
         # Add more actions as needed
 
     return 0.1  # run again after 0.1 sec
