@@ -11,14 +11,31 @@ bl_info = {
 import bpy
 import json
 import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
 import queue
 import os
 import sys
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import importlib
 
-# Import action functions with proper Blender addon path handling
+# Global bpy reference for action modules
+global_bpy = bpy
+
+def inject_bpy_to_actions():
+    """Inject bpy module into action modules"""
+    action_modules = [
+        'create_object', 'modify_object', 'boolean_difference',
+        'undo', 'redo', 'select_faces', 'add_thread', 'bisect_plane'
+    ]
+    
+    for module_name in action_modules:
+        try:
+            module = importlib.import_module(f".actions.{module_name}", package=__name__)
+            module.bpy = global_bpy
+        except Exception as e:
+            print(f"[Blend-REST] Failed to inject bpy into {module_name}: {e}")
+
+# Import action functions
 try:
-    # First try relative imports (works when installed as addon)
     from .actions.create_object import execute_create_object
     from .actions.modify_object import execute_modify_object
     from .actions.boolean_difference import execute_boolean_difference
@@ -27,119 +44,132 @@ try:
     from .actions.select_faces import execute_select_faces
     from .actions.add_thread import execute_add_thread
     from .actions.bisect_plane import execute_bisect_plane
-    print("[Blend-REST] All action functions imported successfully via relative imports")
+    print("[Blend-REST] All action functions imported successfully")
+    
+    # Inject bpy into action modules
+    inject_bpy_to_actions()
+    
 except ImportError as e:
-    print(f"[Blend-REST] Relative imports failed: {e}")
-    # Fallback: try absolute import (for development/testing)
-    try:
-        actions_dir = os.path.join(os.path.dirname(__file__), 'actions')
-        if os.path.isdir(actions_dir) and actions_dir not in sys.path:
-            sys.path.append(actions_dir)
-        
-        from actions.create_object import execute_create_object
-        from actions.modify_object import execute_modify_object
-        from actions.boolean_difference import execute_boolean_difference
-        from actions.undo import execute_undo
-        from actions.redo import execute_redo
-        from actions.select_faces import execute_select_faces
-        from actions.add_thread import execute_add_thread
-        from actions.bisect_plane import execute_bisect_plane
-        print("[Blend-REST] Using fallback import method")
-    except ImportError as e:
-        print(f"[Blend-REST] Critical: All import methods failed: {e}")
+    print(f"[Blend-REST] Import failed: {e}")
 
 # Thread-safe command queue
 command_queue = queue.Queue()
 
-
 class BlenderRESTHandler:
     def __init__(self, queue):
         self.queue = queue
-
+    
     def handle_request(self, command):
         """Handle REST API requests by adding to command queue"""
         self.queue.put(command)
         return {"status": "queued"}
 
-
+# Server class for Blender integration
 class BlendRESTServer:
     def __init__(self):
         self.server = None
         self.handler = BlenderRESTHandler(command_queue)
         self.is_running = False
-
+    
     def start_server(self, port=8000):
+        """Start the REST server"""
         if self.is_running:
             return {"status": "already running"}
-
+        
         try:
-            handler_ref = self.handler
-
-            class CustomHTTPHandler(BaseHTTPRequestHandler):
-                def do_GET(self):
-                    try:
-                        if self.path == '/v1/models':
-                            objects = [{
+            self.server = HTTPServer(('localhost', port), self._create_http_handler())
+            self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+            self.server_thread.start()
+            self.is_running = True
+            return {"status": "started", "port": port}
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+    
+    def stop_server(self):
+        """Stop the REST server"""
+        if self.server:
+            self.server.shutdown()
+            self.server = None
+            self.is_running = False
+        return {"status": "stopped"}
+    
+    def _create_http_handler(self):
+        """Create HTTP handler class"""
+        handler = self.handler
+        
+        class CustomHTTPHandler(BaseHTTPRequestHandler):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.handler = handler
+            
+            def do_GET(self):
+                """Handle GET requests"""
+                try:
+                    if self.path == '/v1/models':
+                        # Get all objects in the scene
+                        objects = []
+                        for obj in bpy.data.objects:
+                            objects.append({
                                 "name": obj.name,
                                 "type": obj.type,
                                 "location": list(obj.location),
                                 "rotation": list(obj.rotation_euler),
                                 "dimensions": list(obj.dimensions)
-                            } for obj in bpy.data.objects]
-
-                            self._send_json(objects)
-                        elif self.path == '/v1/status':
-                            self._send_json({"status": "ready", "objects": len(bpy.data.objects)})
-                        else:
-                            self._send_json({"error": "Endpoint not found"}, 404)
-                    except Exception as e:
-                        self._send_json({"error": str(e)}, 500)
-
-                def do_POST(self):
-                    try:
-                        if self.path == '/v1/commands':
-                            content_length = int(self.headers.get('Content-Length', 0))
-                            post_data = self.rfile.read(content_length)
-                            command = json.loads(post_data.decode())
-                            result = handler_ref.handle_request(command)
-                            self._send_json(result)
-                        else:
-                            self._send_json({"error": "Endpoint not found"}, 404)
-                    except Exception as e:
-                        self._send_json({"error": str(e)}, 500)
-
-                def log_message(self, format, *args):
-                    # prevent server from spamming Blender console
-                    return
-
-                def _send_json(self, data, code=200):
-                    self.send_response(code)
+                            })
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(objects).encode())
+                    elif self.path == '/v1/status':
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps({"status": "ready", "objects": len(bpy.data.objects)}).encode())
+                    else:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Endpoint not found"}')
+                except Exception as e:
+                    self.send_response(500)
                     self.send_header('Content-type', 'application/json')
                     self.end_headers()
-                    self.wfile.write(json.dumps(data).encode())
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+            
+            def do_POST(self):
+                """Handle POST requests"""
+                try:
+                    if self.path == '/v1/commands':
+                        content_length = int(self.headers['Content-Length'])
+                        post_data = self.rfile.read(content_length)
+                        command = json.loads(post_data.decode())
+                        
+                        # Add command to queue
+                        result = self.handler.handle_request(command)
+                        
+                        self.send_response(200)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(json.dumps(result).encode())
+                    else:
+                        self.send_response(404)
+                        self.send_header('Content-type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Endpoint not found"}')
+                except Exception as e:
+                    self.send_response(500)
+                    self.send_header('Content-type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps({"error": str(e)}).encode())
+        
+        return CustomHTTPHandler
 
-            self.server = HTTPServer(('127.0.0.1', port), CustomHTTPHandler)
-            self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-            self.server_thread.start()
-            self.is_running = True
-            print(f"[Blend-REST] Server started on port {port}")
-            return {"status": "started", "port": port}
-        except Exception as e:
-            return {"status": "error", "error": str(e)}
-
-    def stop_server(self):
-        if self.server:
-            self.server.shutdown()
-            self.server = None
-            self.is_running = False
-            print("[Blend-REST] Server stopped")
-        return {"status": "stopped"}
-
-
-class BLENDREST_OT_start_server(bpy.types.Operator):
-    bl_idname = "blendrest.start_server"
+# Blender operator to start server
+class StartServerOperator(bpy.types.Operator):
+    bl_idname = "blend_rest.start_server"
     bl_label = "Start REST Server"
-
+    
     def execute(self, context):
         global rest_server
         rest_server = BlendRESTServer()
@@ -147,11 +177,11 @@ class BLENDREST_OT_start_server(bpy.types.Operator):
         self.report({'INFO'}, f"Server: {result['status']}")
         return {'FINISHED'}
 
-
-class BLENDREST_OT_stop_server(bpy.types.Operator):
-    bl_idname = "blendrest.stop_server"
+# Blender operator to stop server
+class StopServerOperator(bpy.types.Operator):
+    bl_idname = "blend_rest.stop_server"
     bl_label = "Stop REST Server"
-
+    
     def execute(self, context):
         global rest_server
         if rest_server:
@@ -159,24 +189,25 @@ class BLENDREST_OT_stop_server(bpy.types.Operator):
             self.report({'INFO'}, f"Server: {result['status']}")
         return {'FINISHED'}
 
-
-class VIEW3D_PT_blend_rest(bpy.types.Panel):
+# Blender panel for UI
+class BlendRESTPanel(bpy.types.Panel):
     bl_label = "Blend-REST"
     bl_idname = "VIEW3D_PT_blend_rest"
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Blend-REST"
-
+    
     def draw(self, context):
         layout = self.layout
-        layout.operator("blendrest.start_server")
-        layout.operator("blendrest.stop_server")
+        layout.operator("blend_rest.start_server")
+        layout.operator("blend_rest.stop_server")
 
-
+# Timer function to process commands
 def process_commands():
     while not command_queue.empty():
         cmd = command_queue.get()
         action = cmd.get("action")
+        
         try:
             if action == "create_object":
                 execute_create_object(cmd)
@@ -199,32 +230,33 @@ def process_commands():
             print(f"[Blend-REST] Error executing action '{action}': {e}")
             print(f"[Blend-REST] Traceback: {traceback.format_exc()}")
 
-    return 0.1
+    return 0.1  # run again after 0.1 sec
 
-
+# Global server instance
 rest_server = None
 
-
+# Registration
 def register():
-    bpy.utils.register_class(BLENDREST_OT_start_server)
-    bpy.utils.register_class(BLENDREST_OT_stop_server)
-    bpy.utils.register_class(VIEW3D_PT_blend_rest)
-
+    bpy.utils.register_class(StartServerOperator)
+    bpy.utils.register_class(StopServerOperator)
+    bpy.utils.register_class(BlendRESTPanel)
+    
+    # Start command processor timer
     if not bpy.app.timers.is_registered(process_commands):
         bpy.app.timers.register(process_commands)
 
-
 def unregister():
-    bpy.utils.unregister_class(BLENDREST_OT_start_server)
-    bpy.utils.unregister_class(BLENDREST_OT_stop_server)
-    bpy.utils.unregister_class(VIEW3D_PT_blend_rest)
-
+    bpy.utils.unregister_class(StartServerOperator)
+    bpy.utils.unregister_class(StopServerOperator)
+    bpy.utils.unregister_class(BlendRESTPanel)
+    
+    # Stop server if running
     if rest_server:
         rest_server.stop_server()
-
+    
+    # Stop command processor timer
     if bpy.app.timers.is_registered(process_commands):
         bpy.app.timers.unregister(process_commands)
-
 
 if __name__ == "__main__":
     register()
