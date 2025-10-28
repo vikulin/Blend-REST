@@ -4,29 +4,38 @@ def execute_polygon_shape(cmd):
     """Create a custom polygon shape from vertices and faces safely"""
     
     params = cmd.get("params", {})
-    vertices_raw = params.get("vertices", [])
-    faces_raw = params.get("faces", [])
+    vertices = params.get("vertices", [])
+    faces = params.get("faces", [])
     location = params.get("location", [0, 0, 0])
     name = params.get("name", "PolygonShape")
     
-    if not vertices_raw or not faces_raw:
+    if not vertices or not faces:
         print("[Polygon Shape] Error: vertices and faces arrays are required")
         return False
+
     
-    # --- Convert string arrays to proper lists ---
-    try:
-        vertices = [list(map(float, v.strip().split())) for v in vertices_raw]
-        faces = [list(map(int, f.strip().split())) for f in faces_raw]
-    except Exception as e:
-        print(f"[Polygon Shape] Error converting vertices/faces: {e}")
-        return False
-    
-    # Validate faces
+    # Validate and normalize faces format
+    processed_faces = []
     max_index = len(vertices) - 1
-    for f in faces:
-        if any(v > max_index or v < 0 for v in f):
-            print(f"[Polygon Shape] Error: face {f} references invalid vertex index")
+    
+    # Check if faces is a single flat list of vertex indices
+    if all(isinstance(f, int) for f in faces):
+        # Convert flat list to a single face containing all vertices
+        processed_faces = [faces]
+    else:
+        # Faces is already in correct format: list of face lists
+        processed_faces = faces
+    
+    # Validate each face
+    for i, face in enumerate(processed_faces):
+        if not isinstance(face, (list, tuple)):
+            print(f"[Polygon Shape] Error: face {i} must be a list/tuple of vertex indices")
             return False
+        if any(v > max_index or v < 0 for v in face):
+            print(f"[Polygon Shape] Error: face {i} references invalid vertex index")
+            return False
+    
+    faces = processed_faces
     
     # Create mesh and object
     mesh = bpy.data.meshes.new(name)

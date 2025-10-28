@@ -2,7 +2,7 @@ bl_info = {
     "name": "Blend-REST",
     "description": "REST API server for Blender automation",
     "author": "Vadym Vikulin",
-    "version": (1, 1, 3),
+    "version": (1, 1, 4),
     "blender": (3, 6, 0),
     "location": "View3D > Tool Shelf > Blend-REST",
     "category": "Development",
