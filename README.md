@@ -168,6 +168,57 @@ Add threaded details using MACHIN3tools plugin (requires MACHIN3tools addon inst
 }
 ```
 
+### Polygon Shape
+Create custom polygon shapes from vertices and faces.
+
+**Request:**
+```json
+{
+  "action": "polygon_shape",
+  "params": {
+    "vertices": [
+      [0, 0, 0],
+      [1, 0, 0],
+      [1, 1, 0],
+      [0, 1, 0]
+    ],
+    "faces": [
+      [0, 1, 2, 3]
+    ],
+    "location": [0, 0, 0],
+    "name": "CustomPolygon"
+  }
+}
+```
+
+**Parameters:**
+- `vertices`: Array of vertex coordinates [x, y, z]
+- `faces`: Array of face vertex indices
+- `location`: Object location [x, y, z] (default: [0, 0, 0])
+- `name`: Object name (default: "PolygonShape")
+
+**Example: Create a bolt head**
+```json
+{
+  "action": "polygon_shape",
+  "params": {
+    "name": "BoltHead",
+    "location": [0, 0, 0],
+    "vertices": [
+      [5, 0, 0], [2.5, 4.33, 0], [-2.5, 4.33, 0], [-5, 0, 0], [-2.5, -4.33, 0], [2.5, -4.33, 0],
+      [5, 0, 3], [2.5, 4.33, 3], [-2.5, 4.33, 3], [-5, 0, 3], [-2.5, -4.33, 3], [2.5, -4.33, 3]
+    ],
+    "faces": [
+      [0, 1, 2, 3, 4, 5], [6, 7, 8, 9, 10, 11],
+      [0, 6, 7, 1], [1, 7, 8, 2], [2, 8, 9, 3],
+      [3, 9, 10, 4], [4, 10, 11, 5], [5, 11, 6, 0]
+    ]
+  }
+}
+```
+
+![Bolt Head](examples/BoldHead.png)
+
 ### Setup Scene
 Configure Blender for small-scale modeling (0-300 mm).
 

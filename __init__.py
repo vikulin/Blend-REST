@@ -2,7 +2,7 @@ bl_info = {
     "name": "Blend-REST",
     "description": "REST API server for Blender automation",
     "author": "Vadym Vikulin",
-    "version": (1, 1, 2),
+    "version": (1, 1, 3),
     "blender": (3, 6, 0),
     "location": "View3D > Tool Shelf > Blend-REST",
     "category": "Development",
@@ -32,7 +32,8 @@ action_modules = [
     'select_faces', 
     'add_thread', 
     'bisect_plane',
-    'setup_scene'
+    'setup_scene',
+    'polygon_shape'
 ]
 
 def safe_import_actions():
