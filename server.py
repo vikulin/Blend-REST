@@ -162,7 +162,6 @@ def process_commands():
             bpy.ops.mesh.select_face_by_sides(number=4, type='EQUAL')  # Select only quads
         
             if side_type in ["external", "internal"]:
-            
                 # Now filter based on external/internal using face normals
                 bm = bmesh.from_edit_mesh(obj.data)
                 bm.faces.ensure_lookup_table()
@@ -247,18 +246,13 @@ def process_commands():
             # Perform bisect plane operation assuming faces are already selected
             bisect_params = cmd.get("params", {})
             target_object = bisect_params.get("target")  # Object to bisect
+            factor = bisect_params.get("factor", 0.0)   # Offset along cylinder axis
             
             # Get the target object
             obj = bpy.data.objects.get(target_object)
             if not obj:
                 print(f"Error: Object '{target_object}' not found")
                 return 0.1
-            
-            # Select object and enter edit mode
-            #bpy.ops.object.select_all(action='DESELECT')
-            #obj.select_set(True)
-            #bpy.context.view_layer.objects.active = obj
-            #bpy.ops.object.mode_set(mode='EDIT')
             
             # Create BMesh from edit mesh
             bm = bmesh.from_edit_mesh(obj.data)
@@ -312,8 +306,8 @@ def process_commands():
             
             if best_pair and best_angle < 0.3:  # ~90 degree angle (dot < 0.3)
                 # Calculate cross product to get cylinder axis (perpendicular to both normals)
-                bisect_direction = best_pair[0].cross(best_pair[1]).normalized()
-                print(f"Using cross product method: best_angle={best_angle}, bisect_direction={bisect_direction}")
+                cylinder_axis = best_pair[0].cross(best_pair[1]).normalized()
+                print(f"Using cross product method: best_angle={best_angle}, cylinder_axis={cylinder_axis}")
             else:
                 # Fallback: find vector most orthogonal to all normals
                 best_axis = None
@@ -334,26 +328,30 @@ def process_commands():
                         min_max_dot = max_dot
                         best_axis = candidate
                 
-                bisect_direction = best_axis
-                print(f"Using fallback method: min_max_dot={min_max_dot}, bisect_direction={bisect_direction}")
+                cylinder_axis = best_axis
+                print(f"Using fallback method: min_max_dot={min_max_dot}, cylinder_axis={cylinder_axis}")
+            
+            # Apply factor offset along the cylinder axis
+            plane_co = plane_co + cylinder_axis * factor
+            print(f"Final plane position with offset: plane_co={plane_co}")
             
             # Perform bisect operation
             try:
                 bpy.ops.mesh.bisect(
                     plane_co=plane_co,
-                    plane_no=bisect_direction,
+                    plane_no=cylinder_axis,
                     use_fill=False,
                     clear_inner=False,
                     clear_outer=False,
                     threshold=0.0001
                 )
-                print(f"Bisect plane applied to '{target_object}' at position {plane_co}")
+                print(f"Bisect plane applied to '{target_object}' at position {plane_co} with offset {factor}")
             except Exception as e:
                 print(f"Error applying bisect: {e}")
             finally:
                 # Return to object mode
                 print("done")
-                #bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.mode_set(mode='OBJECT')
             
             bpy.ops.ed.undo_push(message="Bisect plane applied")
             
