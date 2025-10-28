@@ -1,20 +1,26 @@
 # Blend-REST
 
-A REST API server for Blender that allows you to create and manipulate 3D objects programmatically.
+A Blender addon that provides a REST API server for programmatic 3D object creation and manipulation.
 
-## Setup
+## 📦 Installation
 
-1. **Install the script in Blender**:
+### Method 1: Install as Blender Addon (Recommended)
+1. **Download the addon**: Get the `Blend-REST.zip` file from the repository
+2. **Install in Blender**:
    - Open Blender
-   - Go to `Scripting` workspace
-   - Open the text editor and load `server.py`
-   - Click `Run Script` to start the REST server
+   - Go to `Edit` > `Preferences` > `Add-ons`
+   - Click `Install...` and select the `Blend-REST.zip` file
+   - Enable the addon by checking the checkbox next to "Blend-REST"
+3. **Start the server**:
+   - In the 3D View, look for the "Blend-REST" panel in the sidebar (N-key panel)
+   - Click "Start REST Server" to start the API server on port 8000
 
-2. **Verify the server is running**:
-   - The server runs on `localhost:8000`
-   - You should see a message indicating the server has started
+### Method 2: Manual Script Execution
+```bash
+# Open Blender scripting workspace and run server.py manually
+```
 
-## REST API Endpoints
+## 🚀 REST API Endpoints
 
 ### GET /v1/models
 Retrieve all objects in the current scene.
@@ -26,146 +32,272 @@ curl http://localhost:8000/v1/models
 
 **Response:**
 ```json
+[
+  {
+    "name": "Cube",
+    "type": "MESH",
+    "location": [0, 0, 0],
+    "rotation": [0, 0, 0],
+    "dimensions": [2, 2, 2]
+  }
+]
+```
+
+### GET /v1/status
+Check server status and scene information.
+
+**Example:**
+```bash
+curl http://localhost:8000/v1/status
+```
+
+**Response:**
+```json
 {
-  "models": [
-    {
-      "name": "Cube",
-      "type": "MESH",
-      "location": [0, 0, 0],
-      "rotation": [0, 0, 0],
-      "scale": [1, 1, 1]
-    }
-  ]
+  "status": "ready",
+  "objects": 5
 }
 ```
 
-### POST /
-Create or modify objects in the scene.
+### POST /v1/commands
+Execute commands to create and manipulate objects.
 
-**Supported Actions:**
+## 🛠️ Supported Actions
 
-#### Create Object
+### Create Object
+Create any primitive object type.
+
+**Request:**
 ```json
 {
   "action": "create_object",
   "type": "cylinder",
   "params": {
-    "radius": 1,
-    "depth": 1,
-    "location": [0, 0, 0]
+    "radius": 1.0,
+    "depth": 2.0,
+    "location": [0, 0, 0],
+    "rotation": [0, 0, 0]
   }
 }
 ```
 
-Supported types: `cube`, `cylinder`, `sphere`, `cone`, `plane`
+**Supported Types:** `cube`, `cylinder`, `uv_sphere`, `ico_sphere`, `cone`, `torus`, `plane`
 
-#### Modify Object
+**Parameters:** All standard Blender primitive parameters are supported.
+
+### Modify Object
+Modify properties of an existing object.
+
+**Request:**
 ```json
 {
   "action": "modify_object",
   "name": "Cylinder",
   "properties": {
-    "location": [0, 0, 0],
-    "rotation": [0, 0, 0],
-    "scale": [1, 1, 1]
+    "location": [1, 2, 3],
+    "rotation_euler": [0.5, 0, 0],
+    "scale": [2, 1, 1]
   }
 }
 ```
 
-#### Boolean Difference (Create Hole)
+### Boolean Difference
+Perform boolean difference operation with any primitive cutter.
+
+**Request:**
 ```json
 {
   "action": "boolean_difference",
-  "target": "Cylinder",
+  "target": "Cube",
   "cutter": {
     "type": "cylinder",
     "radius": 0.5,
-    "depth": 2.2,
-    "location": [0, 0, 0]
+    "depth": 2.0,
+    "location": [0, 0, 0],
+    "rotation": [1.5708, 0, 0]  // 90 degrees around X axis
   }
 }
 ```
 
-#### Undo Last Operation
+**Supported Cutter Types:** `cube`, `cylinder`, `uv_sphere`, `ico_sphere`, `cone`, `torus`, `plane`
+
+### Select Faces
+Select specific faces on an object based on criteria.
+
+**Request:**
+```json
+{
+  "action": "select_faces",
+  "params": {
+    "target": "Cylinder",
+    "side": "external"  // "external", "internal", or "all"
+  }
+}
+```
+
+### Bisect Plane
+Perform bisect plane operation on selected faces.
+
+**Request:**
+```json
+{
+  "action": "bisect_plane",
+  "params": {
+    "target": "Cylinder",
+    "factor": 0.5  // Offset along cylinder axis
+  }
+}
+```
+
+### Add Thread
+Add threaded details using MACHIN3tools plugin (requires MACHIN3tools addon installed).
+
+**Request:**
+```json
+{
+  "action": "add_thread",
+  "params": {
+    "target": "Cylinder",
+    "position": [0, 0, 0],
+    "radius": 0.2,
+    "segments": 32,
+    "loops": 10,
+    "depth": 10,
+    "fade": 15,
+    "h1": 0.2,
+    "h2": 0.2,
+    "h3": 0.05,
+    "h4": 0.05,
+    "flip": false
+  }
+}
+```
+
+### Undo/Redo
+Undo or redo operations.
+
+**Undo Request:**
 ```json
 {
   "action": "undo"
 }
 ```
 
-#### Redo Last Undone Operation  
+**Redo Request:**
 ```json
 {
   "action": "redo"
 }
 ```
 
-#### Add Thread
-```json
-{
-  "action": "add_thread",
-  "params": {
-    "target": "Cylinder",    // Name of object to thread
-    "position": [0, 0, 0],   // Position for 3D cursor
-    "radius": 0.2,           // Radius of thread (default: 0.2)
-    "segments": 32,          // Number of segments (default: 32)
-    "loops": 10,             // Number of loops/threads (default: 10)
-    "depth": 10,             // Depth as percentage of minor diameter (default: 10%)
-    "fade": 15,              // Percentage of segments fading (default: 15%)
-    "h1": 0.2,               // Bottom Flank (default: 0.2)
-    "h2": 0.2,               // Top Flank (default: 0.2)
-    "h3": 0.05,              // Crest (default: 0.05)
-    "h4": 0.05,              // Root (default: 0.05)
-    "flip": false            // Flip thread direction (default: false for external thread)
-  }
-}
+## 📋 Examples
+
+### Create a Rotated Cylinder with Boolean Cut
+```bash
+curl -X POST http://localhost:8000/v1/commands \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "create_object",
+    "type": "cylinder",
+    "params": {
+      "radius": 1.0,
+      "depth": 2.0,
+      "location": [0, 0, 0]
+    }
+  }'
 ```
 
-## Examples
+```bash
+curl -X POST http://localhost:8000/v1/commands \
+  -H "Content-Type: application/json" \
+  -d '{
+    "action": "boolean_difference",
+    "target": "Cylinder",
+    "cutter": {
+      "type": "cylinder",
+      "radius": 0.2,
+      "depth": 2.0,
+      "location": [0, 0, 0],
+      "rotation": [1.5708, 0, 0]
+    }
+  }'
+```
 
-### Create a Cylinder
-The `examples/create-cylinder.ps1` script creates a cylinder with radius 1 and depth 1 at the origin.
-
-**Run from PowerShell:**
+### PowerShell Example
 ```powershell
-cd examples
-.\create-cylinder.ps1
+$body = @{
+    action = "boolean_difference"
+    target = "Cylinder"
+    cutter = @{
+        type = "cylinder"
+        radius = 0.2
+        depth = 2.0
+        location = @(0, 0, 0)
+        rotation = @(1.5708, 0, 0)
+    }
+} | ConvertTo-Json
+
+Invoke-RestMethod -Uri "http://localhost:8000/v1/commands" -Method Post -Body $body -ContentType "application/json"
 ```
 
-**Or run directly:**
-```powershell
-curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "create_object", "type": "cylinder", "params": {"radius": 1, "depth": 1, "location": [0, 0, 0]}}' -Uri "http://localhost:8000/"
-```
+## 🏗️ Project Structure
 
-### Undo/Redo Operations
-**Undo last operation:**
-```powershell
-curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "undo"}' -Uri "http://localhost:8000/"
-```
-
-**Redo last undone operation:**
-```powershell
-curl -Method POST -Headers @{'Content-Type'='application/json'} -Body '{"action": "redo"}' -Uri "http://localhost:8000/"
-```
-
-## Development
-
-The server runs in a separate thread within Blender and processes commands through a thread-safe queue. Commands are executed on Blender's main thread using a timer callback.
-
-### Project Structure
 ```
 Blend-REST/
-├── server.py          # Blender REST API server
+├── __init__.py              # Main Blender addon file
+├── actions/                 # Modular action implementations
+│   ├── create_object.py     # Create primitive objects
+│   ├── modify_object.py     # Modify object properties
+│   ├── boolean_difference.py # Boolean operations
+│   ├── select_faces.py      # Face selection
+│   ├── bisect_plane.py      # Bisect operations
+│   ├── add_thread.py        # Thread creation
+│   ├── undo.py              # Undo functionality
+│   └── redo.py              # Redo functionality
 ├── examples/
 │   └── create-cylinder.ps1  # Example PowerShell script
-└── README.md          # This file
+└── README.md               # This documentation
 ```
 
-### Adding New Object Types
-Extend the `process_commands()` function in `server.py` to support additional primitive types or custom operations.
+## 🔧 Development
 
-## Notes
+### Adding New Actions
+1. Create a new file in the `actions/` folder
+2. Implement a function with the signature `execute_action_name(cmd, bpy_module=None)`
+3. Import and register the function in `__init__.py`
 
-- The server must be running within Blender for the API to work
-- All object manipulations are queued and processed on Blender's main thread
-- Make sure Blender is kept open while using the API
+### Module Reloading
+The addon includes automatic module reloading for development:
+```python
+# In __init__.py
+if 'bpy' in locals():
+    reload_modules(bl_info['name'])
+```
+
+## 📝 Notes
+
+- The REST server runs on `localhost:8000` by default
+- All operations are queued and executed on Blender's main thread
+- The addon requires Blender 3.6+ 
+- Some features (like add_thread) require additional plugins
+- Keep Blender open while using the API
+
+## 🐛 Troubleshooting
+
+### Common Issues
+1. **"bpy is not defined"**: Ensure the addon is properly installed and modules are reloaded
+2. **Server not starting**: Check Blender's console for error messages
+3. **Commands not executing**: Verify the action name and parameters are correct
+4. **"add_thread fails"**: Ensure MACHIN3tools addon is installed and enabled
+
+### Debug Mode
+Enable debug output by checking Blender's system console for detailed error messages and logs.
+
+## 📜 License
+
+This project is licensed under the **GNU General Public License v3.0**.  
+See the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit pull requests or open issues for bugs and feature requests.
