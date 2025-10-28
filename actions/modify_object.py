@@ -1,3 +1,5 @@
+import bpy
+
 def execute_modify_object(cmd):
     """Modify object properties"""
     obj_name = cmd.get("name")

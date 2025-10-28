@@ -1,5 +1,8 @@
+import bpy
+import bmesh
+import mathutils
+
 def execute_bisect_plane(cmd):
-    import mathutils
     """Perform bisect plane operation assuming faces are already selected"""
     # Perform bisect plane operation assuming faces are already selected
     bisect_params = cmd.get("params", {})

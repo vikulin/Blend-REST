@@ -27,7 +27,9 @@ try:
     from .actions.select_faces import execute_select_faces
     from .actions.add_thread import execute_add_thread
     from .actions.bisect_plane import execute_bisect_plane
-except ImportError:
+    print("[Blend-REST] All action functions imported successfully via relative imports")
+except ImportError as e:
+    print(f"[Blend-REST] Relative imports failed: {e}")
     # Fallback: try absolute import (for development/testing)
     try:
         actions_dir = os.path.join(os.path.dirname(__file__), 'actions')
@@ -193,7 +195,9 @@ def process_commands():
             elif action == "bisect_plane":
                 execute_bisect_plane(cmd)
         except Exception as e:
+            import traceback
             print(f"[Blend-REST] Error executing action '{action}': {e}")
+            print(f"[Blend-REST] Traceback: {traceback.format_exc()}")
 
     return 0.1
 

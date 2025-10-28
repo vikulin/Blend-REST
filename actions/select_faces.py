@@ -1,3 +1,6 @@
+import bpy
+import bmesh
+
 def execute_select_faces(cmd):
     """Select specific faces on an object"""
     bpy.ops.ed.undo_push(message="Original")

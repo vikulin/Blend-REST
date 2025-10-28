@@ -1,3 +1,5 @@
+import bpy
+
 def execute_add_thread(cmd):
     """Add thread using MACHIN3tools plugin"""
     bpy.ops.ed.undo_push(message="Original")

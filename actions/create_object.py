@@ -1,3 +1,5 @@
+import bpy
+
 def execute_create_object(cmd):
     """Create any primitive object"""
     typ = cmd["type"]

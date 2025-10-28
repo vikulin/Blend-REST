@@ -1,3 +1,5 @@
+import bpy
+
 def execute_boolean_difference(cmd):
     """Perform boolean difference operation with any primitive cutter"""
     bpy.ops.ed.undo_push(message="Original")
