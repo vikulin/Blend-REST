@@ -331,7 +331,7 @@ Blend-REST/
 
 ### Adding New Actions
 1. Create a new file in the `actions/` folder
-2. Implement a function with the signature `execute_action_name(cmd, bpy_module=None)`
+2. Implement a function with the signature `execute_action_name(cmd)`
 3. Import and register the function in `__init__.py`
 
 ### Module Reloading
