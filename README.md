@@ -125,10 +125,36 @@ Select specific faces on an object based on criteria.
   "action": "select_faces",
   "params": {
     "target": "Cylinder",
-    "side": "external"  // "external", "internal", or "all"
+    "side": "external",  // "external", "internal", or "all"
+    "faces_set_index": 0  // Optional: select specific ring segment (0, 1, 2, ...)
   }
 }
 ```
+
+**Parameters:**
+- `target`: Name of the object to select faces on
+- `side`: Face selection criteria:
+  - `"external"`: Select faces facing outward
+  - `"internal"`: Select faces facing inward  
+  - `"all"`: Select all quad faces
+- `faces_set_index`: Optional parameter to select specific segments created by bisect operations:
+  - `0`: Faces before first bisect cut
+  - `1`: Faces between first and second bisect cuts
+  - `2`: Faces between second and third bisect cuts
+  - `...`: And so on for multiple bisect operations
+
+**Note:** The `faces_set_index` parameter is particularly useful after `bisect_plane` operations, allowing selection of specific segments created by the cuts.
+
+**Example:**
+After applying bisect operations to a cylinder, you can select different segments:
+
+![Face Set Index Example](examples/faces_set_index.png)
+
+In this example, a single bisect operation creates two segments that can be selected using:
+- `faces_set_index=0`: Faces on one side of the cut
+- `faces_set_index=1`: Faces on the other side of the cut
+
+The system supports multiple bisect operations, creating additional segments that can be selected with higher index values.
 
 ### Bisect Plane
 Perform bisect plane operation on selected faces.
