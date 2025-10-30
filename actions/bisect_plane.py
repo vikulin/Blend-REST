@@ -49,50 +49,44 @@ def execute_bisect_plane(cmd):
     # Debug output: show weighted center calculation
     print(f"Weighted center calculation: total_area={total_area}, weighted_center={weighted_center}, plane_co={plane_co}")
     
-    # Calculate the proper perpendicular direction for cylindrical geometry
-    # Collect all face normals
-    normals = [face.normal for face in selected_faces]
-    print(f"Collected {len(normals)} face normals")
+    # Calculate cylinder axis using bounding box method (more reliable than face normals)
+    # Get the bounding box of selected faces to determine cylinder orientation
+    bbox_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
+    bbox_max = mathutils.Vector((float('-inf'), float('-inf'), float('-inf')))
     
-    # Find two face normals with approximately 90 degree angle
-    best_pair = None
-    best_angle = float('inf')  # Looking for dot product closest to 0
+    for face in selected_faces:
+        for vert in face.verts:
+            bbox_min.x = min(bbox_min.x, vert.co.x)
+            bbox_min.y = min(bbox_min.y, vert.co.y)
+            bbox_min.z = min(bbox_min.z, vert.co.z)
+            bbox_max.x = max(bbox_max.x, vert.co.x)
+            bbox_max.y = max(bbox_max.y, vert.co.y)
+            bbox_max.z = max(bbox_max.z, vert.co.z)
     
-    for i in range(len(normals)):
-        for j in range(i + 1, len(normals)):
-            dot_product = abs(normals[i].dot(normals[j]))
-            if dot_product < best_angle:
-                best_angle = dot_product
-                best_pair = (normals[i], normals[j])
+    # Calculate the dimensions of the bounding box
+    bbox_size = bbox_max - bbox_min
     
-    if best_pair and best_angle < 0.3:  # ~90 degree angle (dot < 0.3)
-        # Calculate cross product to get cylinder axis (perpendicular to both normals)
-        cylinder_axis = best_pair[0].cross(best_pair[1]).normalized()
-        print(f"Using cross product method: best_angle={best_angle}, cylinder_axis={cylinder_axis}")
-    else:
-        # Fallback: find vector most orthogonal to all normals
-        best_axis = None
-        min_max_dot = float('inf')
-        
-        candidates = [
-            mathutils.Vector((1, 0, 0)),
-            mathutils.Vector((0, 1, 0)), 
-            mathutils.Vector((0, 0, 1)),
-            mathutils.Vector((-1, 0, 0)),
-            mathutils.Vector((0, -1, 0)),
-            mathutils.Vector((0, 0, -1))
-        ]
-        
-        for candidate in candidates:
-            max_dot = max(abs(candidate.dot(normal)) for normal in normals)
-            if max_dot < min_max_dot:
-                min_max_dot = max_dot
-                best_axis = candidate
-        
-        cylinder_axis = best_axis
-        print(f"Using fallback method: min_max_dot={min_max_dot}, cylinder_axis={cylinder_axis}")
+    # Find the longest axis - this is likely the cylinder's main axis
+    longest_axis_index = 0
+    longest_axis_value = bbox_size[0]
+    
+    for i in range(1, 3):
+        if bbox_size[i] > longest_axis_value:
+            longest_axis_value = bbox_size[i]
+            longest_axis_index = i
+    
+    # Create axis vector based on the longest bounding box dimension
+    cylinder_axis = mathutils.Vector((0, 0, 0))
+    cylinder_axis[longest_axis_index] = 1.0
+    
+    # Transform the axis to object space to ensure it's correctly oriented
+    cylinder_axis = obj.matrix_world.inverted() @ cylinder_axis
+    cylinder_axis.normalize()
+    
+    print(f"Using bounding box method: cylinder axis={cylinder_axis}, longest axis index={longest_axis_index}")
     
     # Apply factor offset along the cylinder axis
+    # Positive factor moves toward one end, negative toward the other
     plane_co = plane_co + cylinder_axis * factor
     print(f"Final plane position with offset: plane_co={plane_co}")
     
