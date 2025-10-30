@@ -49,7 +49,7 @@ def execute_select_faces(cmd):
     return True
 
 def select_faces_by_ring_criterion(bm, set_index):
-    """Select faces based on which side of bisect plane they're on"""
+    """Select faces based on multiple bisect planes"""
     # Ensure lookup tables are up to date
     bm.verts.ensure_lookup_table()
     bm.edges.ensure_lookup_table()
@@ -71,7 +71,7 @@ def select_faces_by_ring_criterion(bm, set_index):
         print("No ring vertices found")
         return
     
-    # Find edges connecting ring vertices (potential bisect edges)
+    # Find edges connecting ring vertices (bisect edges)
     ring_edges = []
     for edge in bm.edges:
         if all(vert in ring_vertices for vert in edge.verts):
@@ -83,18 +83,7 @@ def select_faces_by_ring_criterion(bm, set_index):
         print("No ring edges found")
         return
     
-    # Calculate average position of all ring edges to find bisect plane
-    edge_positions = []
-    for edge in ring_edges:
-        vert1, vert2 = edge.verts
-        center = (vert1.co + vert2.co) / 2
-        edge_positions.append(center)
-    
-    avg_bisect_pos = sum(edge_positions, mathutils.Vector()) / len(edge_positions)
-    
-    # Determine the correct bisect plane orientation
-    # The bisect plane should be perpendicular to the cylinder's main axis
-    # First, find the cylinder's main axis using all quad faces
+    # Determine cylinder's main axis
     bbox_min = mathutils.Vector((float('inf'), float('inf'), float('inf')))
     bbox_max = mathutils.Vector((float('-inf'), float('-inf'), float('-inf')))
     
@@ -109,30 +98,74 @@ def select_faces_by_ring_criterion(bm, set_index):
     
     bbox_size = bbox_max - bbox_min
     cylinder_axis = max(range(3), key=lambda i: bbox_size[i])
+    print(f"Cylinder main axis: {cylinder_axis}")
     
-    # The bisect plane should be perpendicular to the cylinder's main axis
-    # For a cylinder, the bisect plane normal should align with the cylinder axis
-    main_axis = cylinder_axis
+    # Group ring edges by their position along the cylinder axis
+    # This separates different bisect operations
+    edge_groups = {}
+    for edge in ring_edges:
+        vert1, vert2 = edge.verts
+        center = (vert1.co + vert2.co) / 2
+        position = center[cylinder_axis]
+        
+        # Group edges with similar positions (same bisect operation)
+        group_key = round(position, 4)  # 4 decimal places precision
+        if group_key not in edge_groups:
+            edge_groups[group_key] = []
+        edge_groups[group_key].append(edge)
     
-    print(f"Cylinder main axis: {cylinder_axis}, Bisect plane at {avg_bisect_pos} on axis {main_axis}")
+    print(f"Found {len(edge_groups)} distinct ring groups")
     
-    # Separate faces into two groups based on which side of plane they're on
-    side_a_faces = []
-    side_b_faces = []
+    # Calculate average position for each ring group (bisect plane position)
+    ring_positions = []
+    for group_key, edges in edge_groups.items():
+        positions = []
+        for edge in edges:
+            vert1, vert2 = edge.verts
+            center = (vert1.co + vert2.co) / 2
+            positions.append(center[cylinder_axis])
+        
+        avg_pos = sum(positions) / len(positions)
+        ring_positions.append(avg_pos)
     
-    for face in quad_faces:
-        face_center = face.calc_center_median()
-        if face_center[main_axis] < avg_bisect_pos[main_axis]:
-            side_a_faces.append(face.index)
-        else:
-            side_b_faces.append(face.index)
+    # Sort ring positions along the cylinder axis
+    ring_positions.sort()
+    print(f"Ring positions along axis {cylinder_axis}: {ring_positions}")
     
-    # Create final face groups
+    # Create face groups based on segments between ring positions
     face_groups = []
-    if side_a_faces:
-        face_groups.append(side_a_faces)
-    if side_b_faces:
-        face_groups.append(side_b_faces)
+    
+    if ring_positions:
+        # Add group before first ring
+        group_before = []
+        for face in quad_faces:
+            face_center = face.calc_center_median()
+            if face_center[cylinder_axis] < ring_positions[0]:
+                group_before.append(face.index)
+        if group_before:
+            face_groups.append(group_before)
+        
+        # Add groups between rings
+        for i in range(len(ring_positions) - 1):
+            group_between = []
+            for face in quad_faces:
+                face_center = face.calc_center_median()
+                if ring_positions[i] <= face_center[cylinder_axis] < ring_positions[i + 1]:
+                    group_between.append(face.index)
+            if group_between:
+                face_groups.append(group_between)
+        
+        # Add group after last ring
+        group_after = []
+        for face in quad_faces:
+            face_center = face.calc_center_median()
+            if face_center[cylinder_axis] >= ring_positions[-1]:
+                group_after.append(face.index)
+        if group_after:
+            face_groups.append(group_after)
+    else:
+        # Fallback: single group if no rings found
+        face_groups.append([face.index for face in quad_faces])
     
     print(f"Created {len(face_groups)} face groups")
     for i, group in enumerate(face_groups):
